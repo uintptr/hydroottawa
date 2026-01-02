@@ -1,9 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-  "hydroottawa",
-  "hydroottawa-api",
-]
+members = ["hydroottawa", "hydroottawa-api"]
 
 [workspace.package]
 version = "0.1.0"

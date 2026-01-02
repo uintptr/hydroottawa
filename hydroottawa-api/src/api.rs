@@ -4,8 +4,8 @@ use reqwest::Client;
 use serde::Serialize;
 
 use crate::{
-    api_types::{HoHourlyUsage, HoProfile},
     auth::HoAuth,
+    types::{HoHourlyUsage, HoProfile},
 };
 
 #[derive(Serialize)]
