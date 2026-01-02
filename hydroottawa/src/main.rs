@@ -3,7 +3,7 @@ use clap::Parser;
 use dialoguer::Password;
 use hydroottawa_api::{api::HoApi, auth::HoAuth};
 use log::LevelFilter;
-use rstaples::logging::StaplesLogger;
+use rstaples::{display::printkv, logging::StaplesLogger};
 use std::env;
 
 #[derive(Parser)]
@@ -18,11 +18,12 @@ struct UserArgs {
     username: String,
 }
 
-fn get_password() -> Result<String> {
+fn get_password(username: &str) -> Result<String> {
     if let Ok(password) = env::var("HO_PASSWORD") {
         Ok(password)
     } else {
-        let password = Password::new().with_prompt("Password").interact()?;
+        let prompt = format!("Password for {username}");
+        let password = Password::new().with_prompt(prompt).interact()?;
         Ok(password)
     }
 }
@@ -42,12 +43,17 @@ async fn main() -> Result<()> {
         .with_log_level(log_level)
         .start();
 
-    let password = get_password()?;
+    let password = get_password(&args.username)?;
 
     let auth = HoAuth::new(&args.username, &password).await?;
     println!("Authentication successful!");
 
     let api = HoApi::new(args.verbose);
+
+    let profile = api.profile(&auth).await?;
+
+    println!("Profile:");
+    printkv("Account Id", profile.account_information.account_id);
 
     let usage = api.hourly(&auth).await?;
 
