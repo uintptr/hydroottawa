@@ -24,7 +24,7 @@ Contact:
 === User Information ===
 Username: user@example.com
 Language: en
-MFA Enabled: true
+MFA Enabled: false
 Social Sign-In: false
 
 === Hourly Usage Summary ===
