@@ -1,4 +1,4 @@
-use hydroottawa_api::api_types::{HoHourlyUsage, HoProfile};
+use hydroottawa_api::types::{HoHourlyUsage, HoProfile};
 use std::fmt;
 use tabled::Table;
 

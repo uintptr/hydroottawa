@@ -698,7 +698,6 @@ dependencies = [
 name = "hydroottawa-api"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "aws-cognito-srp",
  "chrono",
  "reqwest",

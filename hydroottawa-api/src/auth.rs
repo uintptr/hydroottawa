@@ -1,8 +1,9 @@
-use anyhow::{Context, Result};
 use aws_cognito_srp::{SrpClient, User};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use crate::error::{Error, Result};
 
 pub struct HoAuth {
     pub jwt_token: String,
@@ -104,21 +105,17 @@ impl HoAuth {
             )
             .json(&initiate_request)
             .send()
-            .await
-            .context("Failed to initiate auth")?
+            .await?
             .json::<InitiateAuthResponse>()
-            .await
-            .context("Failed to parse initiate auth response")?;
+            .await?;
 
         // Step 3: Verify the challenge and generate password verifier
-        let verification = srp_client
-            .verify(
-                &initiate_response.challenge_parameters.secret_block,
-                &initiate_response.challenge_parameters.user_id_for_srp,
-                &initiate_response.challenge_parameters.salt,
-                &initiate_response.challenge_parameters.srp_b,
-            )
-            .context("Failed to verify challenge")?;
+        let verification = srp_client.verify(
+            &initiate_response.challenge_parameters.secret_block,
+            &initiate_response.challenge_parameters.user_id_for_srp,
+            &initiate_response.challenge_parameters.salt,
+            &initiate_response.challenge_parameters.srp_b,
+        )?;
 
         // Step 4: Build challenge response
         let mut challenge_responses = HashMap::new();
@@ -153,11 +150,9 @@ impl HoAuth {
             )
             .json(&respond_request)
             .send()
-            .await
-            .context("Failed to respond to auth challenge")?
+            .await?
             .json::<RespondToAuthChallengeResponse>()
-            .await
-            .context("Failed to parse auth response")?;
+            .await?;
 
         // Step 6: Exchange Cognito tokens for Hydro Ottawa JWT
         let app_token_url = format!("{HO_API_URI}/app-token");
@@ -167,18 +162,18 @@ impl HoAuth {
             .header("x-id", &auth_result.authentication_result.id_token)
             .header("x-access", &auth_result.authentication_result.access_token)
             .send()
-            .await
-            .context("Failed to get app token")?;
+            .await?;
 
         // Extract the custom JWT from the response header
         let jwt_token = response
             .headers()
             .get("x-amzn-remapped-authorization")
-            .context("Missing x-amzn-remapped-authorization header")?
-            .to_str()
-            .context("Invalid header value")?
+            .ok_or_else(|| Error::MissingHeader("x-amzn-remapped-authorization".to_string()))?
+            .to_str()?
             .strip_prefix("Bearer ")
-            .context("Token doesn't start with 'Bearer '")?
+            .ok_or_else(|| {
+                Error::InvalidTokenFormat("Token doesn't start with 'Bearer '".to_string())
+            })?
             .to_string();
 
         Ok(Self {

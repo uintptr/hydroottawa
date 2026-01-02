@@ -1,10 +1,10 @@
-use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use reqwest::Client;
 use serde::Serialize;
 
 use crate::{
     auth::HoAuth,
+    error::Result,
     types::{HoHourlyUsage, HoProfile},
 };
 
@@ -42,11 +42,9 @@ impl HoApi {
             .header("x-access", &auth.access_token)
             .bearer_auth(&auth.jwt_token)
             .send()
-            .await
-            .context("Failed to fetch profile")?
+            .await?
             .json::<serde_json::Value>()
-            .await
-            .context("Failed to parse profile response")?;
+            .await?;
 
         if self.debug_responses {
             dbg!(&profile_dict);
@@ -73,11 +71,9 @@ impl HoApi {
             .bearer_auth(&auth.jwt_token)
             .json(&day)
             .send()
-            .await
-            .context("Failed to fetch profile")?
+            .await?
             .json::<serde_json::Value>()
-            .await
-            .context("Failed to parse profile response")?;
+            .await?;
 
         if self.debug_responses {
             dbg!(&hourly_dict);
