@@ -5,7 +5,8 @@ use tabled::Table;
 pub struct ProfileDisplay<'a>(pub &'a HoProfile);
 pub struct UsageDisplay<'a>(pub &'a HoHourlyUsage);
 
-impl<'a> fmt::Display for ProfileDisplay<'a> {
+impl fmt::Display for ProfileDisplay<'_> {
+    #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let profile = self.0;
         writeln!(f, "\n=== Account Information ===")?;
@@ -121,7 +122,7 @@ impl<'a> fmt::Display for ProfileDisplay<'a> {
     }
 }
 
-impl<'a> fmt::Display for UsageDisplay<'a> {
+impl fmt::Display for UsageDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let usage = self.0;
         writeln!(f, "\n=== Hourly Usage Summary ===")?;
@@ -185,7 +186,7 @@ impl<'a> fmt::Display for UsageDisplay<'a> {
             .collect();
 
         let table = Table::new(intervals).to_string();
-        write!(f, "{}", table)?;
+        write!(f, "{table}")?;
 
         Ok(())
     }

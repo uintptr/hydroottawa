@@ -11,8 +11,16 @@ use std::env;
 
 use display::{ProfileDisplay, UsageDisplay};
 
+const FALLBACK_DATE: NaiveDate = match NaiveDate::from_ymd_opt(2025, 1, 1) {
+    Some(date) => date,
+    None => unreachable!(),
+};
+
 fn yesterday() -> NaiveDate {
-    Local::now().date_naive() - chrono::Duration::days(1)
+    Local::now()
+        .date_naive()
+        .pred_opt()
+        .unwrap_or(FALLBACK_DATE)
 }
 
 #[derive(Parser)]

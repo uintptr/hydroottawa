@@ -18,6 +18,7 @@ dialoguer = "0.12"
 log = "0.4"
 reqwest = { version = "0.13", features = ["form", "json", "rustls"] }
 rstaples = "0.3"
+rumqttc = "0.25"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tabled = "0.17"

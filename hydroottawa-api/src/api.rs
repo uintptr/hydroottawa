@@ -21,6 +21,7 @@ pub struct HoApi {
 const HO_API_URI: &str = "https://api-myaccount.hydroottawa.com";
 
 impl HoApi {
+    #[must_use]
     pub fn new(debug_responses: bool) -> Self {
         let client = Client::new();
 
