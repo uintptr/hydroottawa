@@ -1,6 +1,7 @@
 mod display;
 
 use anyhow::Result;
+use chrono::{Local, NaiveDate};
 use clap::Parser;
 use dialoguer::Password;
 use hydroottawa_api::{api::HoApi, auth::HoAuth};
@@ -10,12 +11,20 @@ use std::env;
 
 use display::{ProfileDisplay, UsageDisplay};
 
+fn yesterday() -> NaiveDate {
+    Local::now().date_naive() - chrono::Duration::days(1)
+}
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct UserArgs {
     /// verbose
     #[arg(short, long)]
     verbose: bool,
+
+    /// date
+    #[arg(short, long, default_value_t = yesterday())]
+    date: NaiveDate,
 
     /// Username
     #[arg(short, long)]
@@ -57,7 +66,7 @@ async fn main() -> Result<()> {
     let profile = api.profile(&auth).await?;
     println!("{}", ProfileDisplay(&profile));
 
-    let usage = api.hourly(&auth).await?;
+    let usage = api.hourly(&auth, &args.date).await?;
     println!("{}", UsageDisplay(&usage));
 
     Ok(())

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use chrono::NaiveDate;
 use reqwest::Client;
 use serde::Serialize;
 
@@ -55,11 +56,11 @@ impl HoApi {
         Ok(profile)
     }
 
-    pub async fn hourly(&self, auth: &HoAuth) -> Result<HoHourlyUsage> {
+    pub async fn hourly(&self, auth: &HoAuth, date: &NaiveDate) -> Result<HoHourlyUsage> {
         let url = format!("{HO_API_URI}/usage/consumption/hourly");
 
         let day = HourlyRequest {
-            date: "2025-12-31".to_string(),
+            date: date.format("%Y-%m-%d").to_string(),
         };
 
         let hourly_dict = self
