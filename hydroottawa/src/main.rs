@@ -1,10 +1,14 @@
+mod display;
+
 use anyhow::Result;
 use clap::Parser;
 use dialoguer::Password;
 use hydroottawa_api::{api::HoApi, auth::HoAuth};
 use log::LevelFilter;
-use rstaples::{display::printkv, logging::StaplesLogger};
+use rstaples::logging::StaplesLogger;
 use std::env;
+
+use display::{ProfileDisplay, UsageDisplay};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -51,17 +55,10 @@ async fn main() -> Result<()> {
     let api = HoApi::new(args.verbose);
 
     let profile = api.profile(&auth).await?;
-
-    println!("Profile:");
-    printkv("Account Id", profile.account_information.account_id);
+    println!("{}", ProfileDisplay(&profile));
 
     let usage = api.hourly(&auth).await?;
-
-    dbg!(usage);
-
-    //let profile = api.profile(&auth).await?;
-    //println!("\nProfile:");
-    //dbg!(profile);
+    println!("{}", UsageDisplay(&usage));
 
     Ok(())
 }

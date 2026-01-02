@@ -11,6 +11,7 @@ dialoguer.workspace = true
 hydroottawa-api = { path = "../hydroottawa-api" }
 log.workspace = true
 rstaples.workspace = true
+tabled.workspace = true
 tokio.workspace = true
 
 [lints]
