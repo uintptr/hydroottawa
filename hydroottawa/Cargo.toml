@@ -1,0 +1,17 @@
+[package]
+name = "hydroottawa"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+dialoguer.workspace = true
+hydroottawa-api = { path = "../hydroottawa-api" }
+log.workspace = true
+rstaples.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

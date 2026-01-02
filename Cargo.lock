@@ -652,16 +652,24 @@ name = "hydroottawa"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-cognito-srp",
  "chrono",
  "clap",
  "dialoguer",
+ "hydroottawa-api",
  "log",
- "reqwest",
  "rstaples",
+ "tokio",
+]
+
+[[package]]
+name = "hydroottawa-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-cognito-srp",
+ "reqwest",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]

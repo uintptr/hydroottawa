@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use dialoguer::Password;
-use hydroottawa::{api::HoApi, auth::HoAuth};
+use hydroottawa_api::{api::HoApi, auth::HoAuth};
 use log::LevelFilter;
 use rstaples::logging::StaplesLogger;
 use std::env;
