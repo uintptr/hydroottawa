@@ -1,9 +1,6 @@
 # Hydro Ottawa Usage Cli
 
-## TODO
-
-- implement the `refresh_token` since this'll likely be running in the
-  background as a systemd service
+## Usage
 
 ```
 hydroottawa --username user@example.com
@@ -101,3 +98,8 @@ ULO:       0.00 kWh ($0.00)
 | 2025-12-31T23:00:00 | 2026-01-01T00:00:00 | Tier1     | 0.97        | 0.12     |
 +---------------------+---------------------+-----------+-------------+----------+
 ```
+
+## TODO
+
+- implement the `refresh_token` since this'll likely be running in the
+  background as a systemd service
