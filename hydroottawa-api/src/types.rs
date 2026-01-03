@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,7 +42,7 @@ pub struct HoUserInformation {
     pub username: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoInterval {
     pub start_date_time: String,
@@ -52,7 +52,7 @@ pub struct HoInterval {
     pub hourly_cost: f64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoSummary {
     pub account_id: String,
@@ -75,7 +75,7 @@ pub struct HoSummary {
     pub number_of_hours: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoHourlyUsage {
     pub intervals: Vec<HoInterval>,

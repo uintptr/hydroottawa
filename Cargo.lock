@@ -690,6 +690,7 @@ dependencies = [
  "log",
  "rstaples",
  "rumqttc",
+ "serde_json",
  "tabled",
  "tokio",
 ]

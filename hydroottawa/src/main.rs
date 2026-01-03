@@ -4,6 +4,7 @@ use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use clap::Parser;
 use dialoguer::Password;
+use hydroottawa::mqtt_pub::mqtt_publish;
 use hydroottawa_api::{api::HoApi, auth::HoAuth};
 use log::LevelFilter;
 use rstaples::logging::StaplesLogger;
@@ -37,6 +38,10 @@ struct UserArgs {
     /// Username
     #[arg(short, long)]
     username: String,
+
+    /// Username
+    #[arg(short, long)]
+    mqtt: Option<String>,
 }
 
 fn get_password(username: &str) -> Result<String> {
@@ -69,13 +74,16 @@ async fn main() -> Result<()> {
     let auth = HoAuth::new(&args.username, &password).await?;
     println!("Authentication successful!");
 
-    let api = HoApi::new(args.verbose);
+    let api = HoApi::new(false);
 
     let profile = api.profile(&auth).await?;
-    println!("{}", ProfileDisplay(&profile));
-
     let usage = api.hourly(&auth, &args.date).await?;
-    println!("{}", UsageDisplay(&usage));
 
-    Ok(())
+    if let Some(mqtt_server) = args.mqtt {
+        mqtt_publish(mqtt_server, &profile, &usage).await
+    } else {
+        println!("{}", ProfileDisplay(&profile));
+        println!("{}", UsageDisplay(&usage));
+        Ok(())
+    }
 }

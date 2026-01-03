@@ -12,6 +12,7 @@ hydroottawa-api = { path = "../hydroottawa-api" }
 log.workspace = true
 rstaples.workspace = true
 rumqttc.workspace = true
+serde_json.workspace = true
 tabled.workspace = true
 tokio.workspace = true
 
