@@ -4,11 +4,12 @@ use clap::Parser;
 use dialoguer::Password;
 use hydroottawa::display::{ProfileDisplay, UsageDisplay};
 use hydroottawa::mqtt_pub::mqtt_publish;
+use hydroottawa::spoon_feed::spoon_feed;
 use hydroottawa_api::{
     api::{DebugResponses, HoApi},
     auth::HoAuth,
 };
-use log::LevelFilter;
+use log::{LevelFilter, info};
 use rstaples::logging::StaplesLogger;
 use std::{env, process::Command};
 use which::which;
@@ -44,6 +45,14 @@ struct UserArgs {
     /// MQTT broker (host or host:port) to publish to instead of printing
     #[arg(short, long)]
     mqtt: Option<String>,
+
+    /// Output as JSON instead of the default ASCII table
+    #[arg(long)]
+    json: bool,
+
+    /// Loop, spoon feed the hourly usage
+    #[arg(long)]
+    spoon_feed: bool,
 }
 
 fn get_password_from_command(command: &str) -> Result<String> {
@@ -87,19 +96,29 @@ async fn main() -> Result<()> {
 
     let password = get_password(&args.username, args.password_command.as_ref())?;
 
-    let auth = HoAuth::new(&args.username, &password).await?;
-    println!("Authentication successful!");
+    if args.spoon_feed {
+        let mqtt_server = args.mqtt.context("mqtt server is missing")?;
 
-    let api = HoApi::new(DebugResponses::Off);
-
-    let profile = api.profile(&auth).await?;
-    let usage = api.hourly(&auth, &args.date).await?;
-
-    if let Some(mqtt_server) = args.mqtt {
-        mqtt_publish(mqtt_server, &profile, &usage).await
+        spoon_feed(args.username, password, mqtt_server).await
     } else {
-        println!("{}", ProfileDisplay(&profile));
-        println!("{}", UsageDisplay(&usage));
-        Ok(())
+        let auth = HoAuth::new(&args.username, &password).await?;
+        info!("Authentication successful!");
+
+        let api = HoApi::new(DebugResponses::Off);
+
+        let profile = api.profile(&auth).await?;
+        let usage = api.hourly(&auth, &args.date).await?;
+
+        if let Some(mqtt_server) = args.mqtt {
+            mqtt_publish(mqtt_server, &profile, &usage).await
+        } else if args.json {
+            let json_str = serde_json::to_string_pretty(&usage)?;
+            println!("{json_str}");
+            Ok(())
+        } else {
+            println!("{}", ProfileDisplay(&profile));
+            println!("{}", UsageDisplay(&usage));
+            Ok(())
+        }
     }
 }
