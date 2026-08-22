@@ -80,10 +80,7 @@ where
                 }
                 Ok(Event::Incoming(Packet::PubAck(_))) => {
                     publish_count += 1;
-                    debug!(
-                        "Publish acknowledged ({}/{})",
-                        publish_count, expected_publishes
-                    );
+                    debug!("Publish acknowledged ({publish_count}/{expected_publishes})");
                     if publish_count >= expected_publishes {
                         info!("All messages acknowledged by broker");
                         break;

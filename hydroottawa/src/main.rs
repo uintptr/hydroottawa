@@ -59,11 +59,11 @@ fn get_password_from_command(command: &str) -> Result<String> {
     String::from_utf8(output.stdout).context("output not utf-8")
 }
 
-fn get_password(username: &str, password_command: &Option<String>) -> Result<String> {
+fn get_password(username: &str, password_command: Option<&String>) -> Result<String> {
     if let Ok(password) = env::var("HO_PASSWORD") {
         Ok(password)
     } else if let Some(command) = password_command {
-        get_password_from_command(&command)
+        get_password_from_command(command)
     } else if let Ok(command) = env::var("HO_PASSWORD_COMMAND") {
         get_password_from_command(&command)
     } else {
@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
 
     StaplesLogger::new().with_colors().with_log_level(log_level).start();
 
-    let password = get_password(&args.username, &args.password_command)?;
+    let password = get_password(&args.username, args.password_command.as_ref())?;
 
     let auth = HoAuth::new(&args.username, &password).await?;
     println!("Authentication successful!");
