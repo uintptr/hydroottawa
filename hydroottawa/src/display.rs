@@ -23,12 +23,7 @@ impl fmt::Display for ProfileDisplay<'_> {
             "  {} {}{}",
             profile.account_information.service_address.street_number,
             profile.account_information.service_address.street_name,
-            if profile
-                .account_information
-                .service_address
-                .apartment
-                .is_empty()
-            {
+            if profile.account_information.service_address.apartment.is_empty() {
                 String::new()
             } else {
                 format!(
@@ -50,12 +45,7 @@ impl fmt::Display for ProfileDisplay<'_> {
             "  {} {}{}",
             profile.account_information.mailing_address.street_number,
             profile.account_information.mailing_address.street_name,
-            if profile
-                .account_information
-                .mailing_address
-                .apartment
-                .is_empty()
-            {
+            if profile.account_information.mailing_address.apartment.is_empty() {
                 String::new()
             } else {
                 format!(
@@ -92,11 +82,7 @@ impl fmt::Display for ProfileDisplay<'_> {
                 "  Business: {}",
                 profile.account_information.business_phone_number
             )?;
-            if !profile
-                .account_information
-                .business_phone_number_extension
-                .is_empty()
-            {
+            if !profile.account_information.business_phone_number_extension.is_empty() {
                 write!(
                     f,
                     " x{}",

@@ -1,2 +1,2 @@
-pub mod mqtt_pub;
 pub mod display;
+pub mod mqtt_pub;

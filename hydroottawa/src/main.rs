@@ -18,10 +18,7 @@ const FALLBACK_DATE: NaiveDate = match NaiveDate::from_ymd_opt(2025, 1, 1) {
 };
 
 fn yesterday() -> NaiveDate {
-    Local::now()
-        .date_naive()
-        .pred_opt()
-        .unwrap_or(FALLBACK_DATE)
+    Local::now().date_naive().pred_opt().unwrap_or(FALLBACK_DATE)
 }
 
 #[derive(Parser)]
@@ -64,10 +61,7 @@ async fn main() -> Result<()> {
         LevelFilter::Error
     };
 
-    StaplesLogger::new()
-        .with_colors()
-        .with_log_level(log_level)
-        .start();
+    StaplesLogger::new().with_colors().with_log_level(log_level).start();
 
     let password = get_password(&args.username)?;
 
