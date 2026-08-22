@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
-use reqwest::Client;
 use serde::Serialize;
+use ureq::Agent;
 
 use crate::{
     HO_API_URI,
@@ -23,9 +23,16 @@ pub enum DebugResponses {
     On,
 }
 
+/// Format a JWT as an `Authorization` header value.
+///
+/// ureq has no `bearer_auth` shorthand, so build the value by hand.
+fn bearer(jwt: &str) -> String {
+    format!("Bearer {jwt}")
+}
+
 /// Client for the Hydro Ottawa `myAccount` REST API.
 pub struct HoApi {
-    client: Client,
+    agent: Agent,
     debug_responses: DebugResponses,
 }
 
@@ -33,10 +40,10 @@ impl HoApi {
     /// Create a new API client.
     #[must_use]
     pub fn new(debug_responses: DebugResponses) -> Self {
-        let client = Client::new();
+        let agent = Agent::new_with_defaults();
 
         Self {
-            client,
+            agent,
             debug_responses,
         }
     }
@@ -47,20 +54,19 @@ impl HoApi {
     ///
     /// Returns an error if the HTTP request fails or the response cannot
     /// be deserialized into [`HoProfile`].
-    pub async fn profile(&self, auth: &HoAuth) -> Result<HoProfile> {
+    pub fn profile(&self, auth: &HoAuth) -> Result<HoProfile> {
         let url = format!("{HO_API_URI}/profile");
 
         let profile_dict = self
-            .client
+            .agent
             .get(url)
             .header("Accept", "application/json")
             .header("x-id", &auth.id_token)
             .header("x-access", &auth.access_token)
-            .bearer_auth(&auth.jwt_token)
-            .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?;
+            .header("Authorization", bearer(&auth.jwt_token))
+            .call()?
+            .body_mut()
+            .read_json::<serde_json::Value>()?;
 
         if self.debug_responses == DebugResponses::On {
             eprintln!("{profile_dict:#?}");
@@ -77,7 +83,7 @@ impl HoApi {
     ///
     /// Returns an error if the HTTP request fails or the response cannot
     /// be deserialized into [`HoHourlyUsage`].
-    pub async fn hourly(&self, auth: &HoAuth, date: &NaiveDate) -> Result<HoHourlyUsage> {
+    pub fn hourly(&self, auth: &HoAuth, date: &NaiveDate) -> Result<HoHourlyUsage> {
         let url = format!("{HO_API_URI}/usage/consumption/hourly");
 
         let day = HourlyRequest {
@@ -85,17 +91,15 @@ impl HoApi {
         };
 
         let hourly_dict = self
-            .client
+            .agent
             .post(url)
             .header("Accept", "application/json")
             .header("x-id", &auth.id_token)
             .header("x-access", &auth.access_token)
-            .bearer_auth(&auth.jwt_token)
-            .json(&day)
-            .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?;
+            .header("Authorization", bearer(&auth.jwt_token))
+            .send_json(&day)?
+            .body_mut()
+            .read_json::<serde_json::Value>()?;
 
         if self.debug_responses == DebugResponses::On {
             eprintln!("{hourly_dict:#?}");

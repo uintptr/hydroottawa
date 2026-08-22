@@ -28,6 +28,10 @@ none of those exist in this repo. Hard rules from it to keep in mind:
 
 ## Conventions
 
+- No async: HTTP is ureq (blocking) and MQTT uses rumqttc's blocking
+  `Client`/`Connection`. There is no `#[tokio::main]` and no `.await`
+  anywhere; tokio only survives as a transitive dep of rumqttc. Don't
+  reintroduce an async runtime.
 - Error handling: `hydroottawa-api` uses thiserror
   (`error::Error`/`Result`); anyhow is binary-only (`main.rs`,
   `mqtt_pub.rs`). Do not add anyhow to the library — it was removed
@@ -58,5 +62,5 @@ topics instead of printing tables.
 
 `.cargo/config.toml` sets the linker for `aarch64-unknown-linux-gnu` —
 aarch64 is the intended deploy target (README plans a systemd service);
-keep that setting. reqwest is on rustls, so no OpenSSL cross-setup is
-needed — keep it that way.
+keep that setting. ureq is on rustls (its default), so no OpenSSL
+cross-setup is needed — keep it that way.

@@ -6,10 +6,10 @@ edition.workspace = true
 [dependencies]
 aws-cognito-srp.workspace = true
 chrono.workspace = true
-reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+ureq.workspace = true
 
 [lints]
 workspace = true

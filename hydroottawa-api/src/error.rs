@@ -10,9 +10,9 @@ pub enum Error {
     //
     // 3rd party
     //
-    /// HTTP transport or response error.
+    /// HTTP transport, status, or body-decoding error.
     #[error(transparent)]
-    HttpError(#[from] reqwest::Error),
+    HttpError(#[from] ureq::Error),
     /// SRP handshake failure.
     #[error(transparent)]
     Srp(#[from] SrpError),
@@ -21,7 +21,7 @@ pub enum Error {
     Serialization(#[from] serde_json::Error),
     /// A response header contained invalid characters.
     #[error(transparent)]
-    InvalidHeaderValue(#[from] reqwest::header::ToStrError),
+    InvalidHeaderValue(#[from] ureq::http::header::ToStrError),
 
     //
     // Custom

@@ -82,8 +82,7 @@ fn get_password(username: &str, password_command: Option<&String>) -> Result<Str
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let args = UserArgs::parse();
 
     let log_level = if args.verbose {
@@ -99,18 +98,18 @@ async fn main() -> Result<()> {
     if args.spoon_feed {
         let mqtt_server = args.mqtt.context("mqtt server is missing")?;
 
-        spoon_feed(args.username, password, mqtt_server).await
+        spoon_feed(args.username, password, mqtt_server)
     } else {
-        let auth = HoAuth::new(&args.username, &password).await?;
+        let auth = HoAuth::new(&args.username, &password)?;
         info!("Authentication successful!");
 
         let api = HoApi::new(DebugResponses::Off);
 
-        let profile = api.profile(&auth).await?;
-        let usage = api.hourly(&auth, &args.date).await?;
+        let profile = api.profile(&auth)?;
+        let usage = api.hourly(&auth, &args.date)?;
 
         if let Some(mqtt_server) = args.mqtt {
-            mqtt_publish(mqtt_server, &profile, &usage).await
+            mqtt_publish(mqtt_server, &profile, &usage)
         } else if args.json {
             let json_str = serde_json::to_string_pretty(&usage)?;
             println!("{json_str}");

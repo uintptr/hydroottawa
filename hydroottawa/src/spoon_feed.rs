@@ -5,7 +5,7 @@ use hydroottawa_api::{
 };
 use log::info;
 
-pub async fn spoon_feed<U, P, M>(user: U, password: P, _mqtt_server: M) -> Result<()>
+pub fn spoon_feed<U, P, M>(user: U, password: P, _mqtt_server: M) -> Result<()>
 where
     U: AsRef<str>,
     P: AsRef<str>,
@@ -13,7 +13,7 @@ where
 {
     let _api = HoApi::new(DebugResponses::Off);
 
-    let _auth = HoAuth::new(user, password).await?;
+    let _auth = HoAuth::new(user, password)?;
 
     info!("authenticated");
 

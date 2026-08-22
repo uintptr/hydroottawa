@@ -1,10 +1,9 @@
 use anyhow::{Context, Result};
 use hydroottawa_api::types::{HoHourlyUsage, HoProfile};
 use log::{debug, info, warn};
-use rumqttc::{AsyncClient, ConnectionError, Event, EventLoop, MqttOptions, Packet, QoS};
+use rumqttc::{Client, Connection, Event, MqttOptions, Packet, QoS};
 use serde_json::json;
 use std::time::Duration;
-use tokio::task::JoinHandle;
 
 /// One Home Assistant MQTT discovery config, describing a single sensor.
 struct DiscoverySensor<'a> {
@@ -16,8 +15,8 @@ struct DiscoverySensor<'a> {
     state_class: Option<&'a str>,
 }
 
-async fn publish_discovery_config(
-    client: &AsyncClient,
+fn publish_discovery_config(
+    client: &Client,
     base_topic: &str,
     account_id: &str,
     sensor: &DiscoverySensor<'_>,
@@ -60,47 +59,48 @@ async fn publish_discovery_config(
     debug!("Publishing discovery config for {sensor_name} to {config_topic}");
     client
         .publish(&config_topic, QoS::AtLeastOnce, true, config.to_string())
-        .await
         .context("publishing discovery config")?;
     Ok(())
 }
 
-/// Run the MQTT event loop until the broker has acknowledged every publish.
-fn spawn_event_loop(
-    mut eventloop: EventLoop,
-) -> JoinHandle<std::result::Result<(), ConnectionError>> {
+/// Drive the MQTT connection until the broker has acknowledged every publish.
+///
+/// The blocking client only makes progress while the connection is being
+/// iterated, so queued publishes are not sent until this runs.
+fn drain_connection(connection: &mut Connection) -> Result<()> {
     const EXPECTED_PUBLISHES: u32 = 3; // 2 discovery configs + 1 state
 
-    tokio::spawn(async move {
-        let mut publish_count = 0u32;
+    let mut publish_count = 0u32;
 
-        loop {
-            match eventloop.poll().await {
-                Ok(Event::Incoming(Packet::ConnAck(_))) => {
-                    info!("Connected to MQTT broker");
-                }
-                Ok(Event::Incoming(Packet::PubAck(_))) => {
-                    publish_count = publish_count.saturating_add(1);
-                    debug!("Publish acknowledged ({publish_count}/{EXPECTED_PUBLISHES})");
-                    if publish_count >= EXPECTED_PUBLISHES {
-                        info!("All messages acknowledged by broker");
-                        break;
-                    }
-                }
-                Ok(Event::Outgoing(_)) => {
-                    debug!("Outgoing event");
-                }
-                Ok(event) => {
-                    debug!("MQTT event: {event:?}");
-                }
-                Err(e) => {
-                    warn!("MQTT connection error: {e}");
-                    return Err(e);
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Incoming(Packet::ConnAck(_))) => {
+                info!("Connected to MQTT broker");
+            }
+            Ok(Event::Incoming(Packet::PubAck(_))) => {
+                publish_count = publish_count.saturating_add(1);
+                debug!("Publish acknowledged ({publish_count}/{EXPECTED_PUBLISHES})");
+                if publish_count >= EXPECTED_PUBLISHES {
+                    info!("All messages acknowledged by broker");
+                    return Ok(());
                 }
             }
+            Ok(Event::Outgoing(_)) => {
+                debug!("Outgoing event");
+            }
+            Ok(event) => {
+                debug!("MQTT event: {event:?}");
+            }
+            Err(e) => {
+                warn!("MQTT connection error: {e}");
+                return Err(e.into());
+            }
         }
-        Ok(())
-    })
+    }
+
+    // The iterator only ends when the request channel is closed, which
+    // cannot happen while the client is still alive above us.
+    anyhow::bail!("MQTT connection closed after {publish_count}/{EXPECTED_PUBLISHES} publishes")
 }
 
 /// Build the state payload from the usage summary (intervals excluded),
@@ -136,7 +136,7 @@ fn build_state_payload(usage: &HoHourlyUsage) -> serde_json::Value {
 ///
 /// Returns an error if a publish fails or the broker connection drops
 /// before all messages are acknowledged.
-pub async fn mqtt_publish<S>(server: S, profile: &HoProfile, usage: &HoHourlyUsage) -> Result<()>
+pub fn mqtt_publish<S>(server: S, profile: &HoProfile, usage: &HoHourlyUsage) -> Result<()>
 where
     S: AsRef<str>,
 {
@@ -154,11 +154,7 @@ where
     let mut mqttoptions = MqttOptions::new("hydroottawa", host, port);
     mqttoptions.set_keep_alive(Duration::from_secs(5));
 
-    let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
-    let eventloop_handle = spawn_event_loop(eventloop);
-
-    // Give the connection a moment to establish
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    let (client, mut connection) = Client::new(mqttoptions, 10);
 
     // Base topic for Home Assistant MQTT discovery
     let base_topic = format!("homeassistant/sensor/hydroottawa_{account_id}");
@@ -183,7 +179,7 @@ where
         },
     ];
     for sensor in &sensors {
-        publish_discovery_config(&client, &base_topic, account_id, sensor).await?;
+        publish_discovery_config(&client, &base_topic, account_id, sensor)?;
     }
 
     // Publish summary state data
@@ -199,24 +195,14 @@ where
             false,
             state_payload.to_string(),
         )
-        .await
         .context("publishing state")?;
-    debug!("Published state to topic: {state_topic}");
+    debug!("Queued state for topic: {state_topic}");
 
-    // Wait for the eventloop task to finish (all publishes acknowledged)
+    // Everything above only queues; iterating the connection connects to
+    // the broker, flushes the queue and waits for the acks.
     debug!("Waiting for all publishes to be acknowledged");
-    match eventloop_handle.await {
-        Ok(Ok(())) => {
-            info!("Successfully published all MQTT messages");
-            Ok(())
-        }
-        Ok(Err(e)) => {
-            warn!("MQTT eventloop error: {e}");
-            Err(e.into())
-        }
-        Err(e) => {
-            warn!("Failed to join eventloop task: {e}");
-            Err(e.into())
-        }
-    }
+    drain_connection(&mut connection)?;
+
+    info!("Successfully published all MQTT messages");
+    Ok(())
 }

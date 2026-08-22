@@ -1,7 +1,7 @@
 use aws_cognito_srp::{SrpClient, User};
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use ureq::Agent;
 
 use crate::{
     HO_API_URI,
@@ -78,12 +78,12 @@ impl HoAuth {
     ///
     /// Returns an error if any HTTP request fails, the SRP handshake
     /// fails, or the JWT response header is missing or malformed.
-    pub async fn new<U, P>(username: U, password: P) -> Result<Self>
+    pub fn new<U, P>(username: U, password: P) -> Result<Self>
     where
         U: AsRef<str>,
         P: AsRef<str>,
     {
-        let client = Client::new();
+        let agent = Agent::new_with_defaults();
 
         let username = username.as_ref();
         let password = password.as_ref();
@@ -106,18 +106,16 @@ impl HoAuth {
             client_metadata: HashMap::new(),
         };
 
-        let initiate_response = client
+        let initiate_response = agent
             .post(COGNITO_ENDPOINT)
             .header("Content-Type", "application/x-amz-json-1.1")
             .header(
                 "X-Amz-Target",
                 "AWSCognitoIdentityProviderService.InitiateAuth",
             )
-            .json(&initiate_request)
-            .send()
-            .await?
-            .json::<InitiateAuthResponse>()
-            .await?;
+            .send_json(&initiate_request)?
+            .body_mut()
+            .read_json::<InitiateAuthResponse>()?;
 
         // Step 3: Verify the challenge and generate password verifier
         let verification = srp_client.verify(
@@ -151,28 +149,25 @@ impl HoAuth {
         };
 
         // Step 5: Respond to challenge and get tokens
-        let auth_result = client
+        let auth_result = agent
             .post(COGNITO_ENDPOINT)
             .header("Content-Type", "application/x-amz-json-1.1")
             .header(
                 "X-Amz-Target",
                 "AWSCognitoIdentityProviderService.RespondToAuthChallenge",
             )
-            .json(&respond_request)
-            .send()
-            .await?
-            .json::<RespondToAuthChallengeResponse>()
-            .await?;
+            .send_json(&respond_request)?
+            .body_mut()
+            .read_json::<RespondToAuthChallengeResponse>()?;
 
         // Step 6: Exchange Cognito tokens for Hydro Ottawa JWT
         let app_token_url = format!("{HO_API_URI}/app-token");
-        let response = client
+        let response = agent
             .get(&app_token_url)
             .header("Accept", "application/json")
             .header("x-id", &auth_result.authentication_result.id_token)
             .header("x-access", &auth_result.authentication_result.access_token)
-            .send()
-            .await?;
+            .call()?;
 
         // Extract the custom JWT from the response header
         let jwt_token = response
