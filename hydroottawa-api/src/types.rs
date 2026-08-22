@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+/// Profile response: account and user information.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoProfile {
@@ -7,6 +8,7 @@ pub struct HoProfile {
     pub user_information: HoUserInformation,
 }
 
+/// Account details: IDs, addresses, and phone numbers.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoAccountInformation {
@@ -21,6 +23,7 @@ pub struct HoAccountInformation {
     pub service_address: HoAddress,
 }
 
+/// A service or mailing address.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoAddress {
@@ -32,6 +35,7 @@ pub struct HoAddress {
     pub street_number: String,
 }
 
+/// User account settings and sign-in details.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoUserInformation {
@@ -42,6 +46,7 @@ pub struct HoUserInformation {
     pub username: String,
 }
 
+/// One hour of usage: timestamps, rate band, kWh, and cost.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoInterval {
@@ -52,6 +57,7 @@ pub struct HoInterval {
     pub hourly_cost: f64,
 }
 
+/// Daily totals and per-rate-band breakdowns.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoSummary {
@@ -75,6 +81,7 @@ pub struct HoSummary {
     pub number_of_hours: u32,
 }
 
+/// Hourly usage response: intervals plus the daily summary.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoHourlyUsage {

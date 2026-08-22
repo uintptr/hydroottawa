@@ -1,21 +1,37 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use hydroottawa_api::types::{HoHourlyUsage, HoProfile};
 use log::{debug, info, warn};
-use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
+use rumqttc::{AsyncClient, ConnectionError, Event, EventLoop, MqttOptions, Packet, QoS};
 use serde_json::json;
 use std::time::Duration;
+use tokio::task::JoinHandle;
+
+/// One Home Assistant MQTT discovery config, describing a single sensor.
+struct DiscoverySensor<'a> {
+    sensor_name: &'a str,
+    friendly_name: &'a str,
+    unit: &'a str,
+    icon: &'a str,
+    device_class: Option<&'a str>,
+    state_class: Option<&'a str>,
+}
 
 async fn publish_discovery_config(
     client: &AsyncClient,
     base_topic: &str,
     account_id: &str,
-    sensor_name: &str,
-    friendly_name: &str,
-    unit: &str,
-    icon: &str,
-    device_class: Option<&str>,
-    state_class: Option<&str>,
+    sensor: &DiscoverySensor<'_>,
 ) -> Result<()> {
+    // Destructure so the fields inline directly into format strings.
+    let DiscoverySensor {
+        sensor_name,
+        friendly_name,
+        unit,
+        icon,
+        device_class,
+        state_class,
+    } = *sensor;
+
     let config_topic = format!("{base_topic}_{sensor_name}/config");
     let state_topic = format!("hydroottawa/{account_id}/state");
 
@@ -44,10 +60,82 @@ async fn publish_discovery_config(
     debug!("Publishing discovery config for {sensor_name} to {config_topic}");
     client
         .publish(&config_topic, QoS::AtLeastOnce, true, config.to_string())
-        .await?;
+        .await
+        .context("publishing discovery config")?;
     Ok(())
 }
 
+/// Run the MQTT event loop until the broker has acknowledged every publish.
+fn spawn_event_loop(
+    mut eventloop: EventLoop,
+) -> JoinHandle<std::result::Result<(), ConnectionError>> {
+    const EXPECTED_PUBLISHES: u32 = 3; // 2 discovery configs + 1 state
+
+    tokio::spawn(async move {
+        let mut publish_count = 0u32;
+
+        loop {
+            match eventloop.poll().await {
+                Ok(Event::Incoming(Packet::ConnAck(_))) => {
+                    info!("Connected to MQTT broker");
+                }
+                Ok(Event::Incoming(Packet::PubAck(_))) => {
+                    publish_count = publish_count.saturating_add(1);
+                    debug!("Publish acknowledged ({publish_count}/{EXPECTED_PUBLISHES})");
+                    if publish_count >= EXPECTED_PUBLISHES {
+                        info!("All messages acknowledged by broker");
+                        break;
+                    }
+                }
+                Ok(Event::Outgoing(_)) => {
+                    debug!("Outgoing event");
+                }
+                Ok(event) => {
+                    debug!("MQTT event: {event:?}");
+                }
+                Err(e) => {
+                    warn!("MQTT connection error: {e}");
+                    return Err(e);
+                }
+            }
+        }
+        Ok(())
+    })
+}
+
+/// Build the state payload from the usage summary (intervals excluded),
+/// with floats rounded to 2 decimals.
+fn build_state_payload(usage: &HoHourlyUsage) -> serde_json::Value {
+    let round = |val: f64| (val * 100.0).round() / 100.0;
+
+    json!({
+        "accountId": usage.summary.account_id,
+        "actualDate": usage.summary.actual_date,
+        "ratePlan": usage.summary.rate_plan,
+        "billingPeriodStartDate": usage.summary.billing_period_start_date,
+        "billingPeriodEndDate": usage.summary.billing_period_end_date,
+        "totalUsage": round(usage.summary.total_usage),
+        "totalCost": round(usage.summary.total_cost),
+        "totalOffPeakUsage": round(usage.summary.total_off_peak_usage),
+        "totalOffPeakCost": round(usage.summary.total_off_peak_cost),
+        "totalMidPeakUsage": round(usage.summary.total_mid_peak_usage),
+        "totalMidPeakCost": round(usage.summary.total_mid_peak_cost),
+        "totalOnPeakUsage": round(usage.summary.total_on_peak_usage),
+        "totalOnPeakCost": round(usage.summary.total_on_peak_cost),
+        "totalUloUsage": round(usage.summary.total_ulo_usage),
+        "totalUloCost": round(usage.summary.total_ulo_cost),
+        "numberOfHours": usage.summary.number_of_hours,
+    })
+}
+
+/// Publish Home Assistant discovery configs and the usage summary state.
+///
+/// `server` is `host` or `host:port` (port defaults to 1883).
+///
+/// # Errors
+///
+/// Returns an error if a publish fails or the broker connection drops
+/// before all messages are acknowledged.
 pub async fn mqtt_publish<S>(server: S, profile: &HoProfile, usage: &HoHourlyUsage) -> Result<()>
 where
     S: AsRef<str>,
@@ -66,43 +154,8 @@ where
     let mut mqttoptions = MqttOptions::new("hydroottawa", host, port);
     mqttoptions.set_keep_alive(Duration::from_secs(5));
 
-    let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-
-    // Spawn the eventloop in a background task
-    let eventloop_handle = tokio::spawn(async move {
-        let mut publish_count = 0;
-        let expected_publishes = 3; // 2 discovery configs + 1 state
-
-        loop {
-            match eventloop.poll().await {
-                Ok(Event::Incoming(Packet::ConnAck(_))) => {
-                    info!("Connected to MQTT broker");
-                }
-                Ok(Event::Incoming(Packet::PubAck(_))) => {
-                    publish_count += 1;
-                    debug!(
-                        "Publish acknowledged ({}/{})",
-                        publish_count, expected_publishes
-                    );
-                    if publish_count >= expected_publishes {
-                        info!("All messages acknowledged by broker");
-                        break;
-                    }
-                }
-                Ok(Event::Outgoing(_)) => {
-                    debug!("Outgoing event");
-                }
-                Ok(event) => {
-                    debug!("MQTT event: {event:?}");
-                }
-                Err(e) => {
-                    warn!("MQTT connection error: {e}");
-                    return Err(e);
-                }
-            }
-        }
-        Ok(())
-    });
+    let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
+    let eventloop_handle = spawn_event_loop(eventloop);
 
     // Give the connection a moment to establish
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -111,58 +164,32 @@ where
     let base_topic = format!("homeassistant/sensor/hydroottawa_{account_id}");
     info!("Publishing Home Assistant discovery configs for account {account_id}");
 
-    // Publish discovery configs for various sensors
-    publish_discovery_config(
-        &client,
-        &base_topic,
-        account_id,
-        "totalUsage",
-        "Total Usage",
-        "kWh",
-        "mdi:lightning-bolt",
-        Some("energy"),
-        Some("total"),
-    )
-    .await?;
-    publish_discovery_config(
-        &client,
-        &base_topic,
-        account_id,
-        "totalCost",
-        "Total Cost",
-        "CAD",
-        "mdi:currency-usd",
-        Some("monetary"),
-        Some("total"),
-    )
-    .await?;
+    let sensors = [
+        DiscoverySensor {
+            sensor_name: "totalUsage",
+            friendly_name: "Total Usage",
+            unit: "kWh",
+            icon: "mdi:lightning-bolt",
+            device_class: Some("energy"),
+            state_class: Some("total"),
+        },
+        DiscoverySensor {
+            sensor_name: "totalCost",
+            friendly_name: "Total Cost",
+            unit: "CAD",
+            icon: "mdi:currency-usd",
+            device_class: Some("monetary"),
+            state_class: Some("total"),
+        },
+    ];
+    for sensor in &sensors {
+        publish_discovery_config(&client, &base_topic, account_id, sensor).await?;
+    }
 
     // Publish summary state data
     info!("Publishing usage summary data");
     let state_topic = format!("hydroottawa/{account_id}/state");
-
-    // Helper function to round to 2 decimals
-    let round = |val: f64| (val * 100.0).round() / 100.0;
-
-    // Create state payload with flattened summary fields (no intervals) and rounded values
-    let state_payload = json!({
-        "accountId": usage.summary.account_id,
-        "actualDate": usage.summary.actual_date,
-        "ratePlan": usage.summary.rate_plan,
-        "billingPeriodStartDate": usage.summary.billing_period_start_date,
-        "billingPeriodEndDate": usage.summary.billing_period_end_date,
-        "totalUsage": round(usage.summary.total_usage),
-        "totalCost": round(usage.summary.total_cost),
-        "totalOffPeakUsage": round(usage.summary.total_off_peak_usage),
-        "totalOffPeakCost": round(usage.summary.total_off_peak_cost),
-        "totalMidPeakUsage": round(usage.summary.total_mid_peak_usage),
-        "totalMidPeakCost": round(usage.summary.total_mid_peak_cost),
-        "totalOnPeakUsage": round(usage.summary.total_on_peak_usage),
-        "totalOnPeakCost": round(usage.summary.total_on_peak_cost),
-        "totalUloUsage": round(usage.summary.total_ulo_usage),
-        "totalUloCost": round(usage.summary.total_ulo_cost),
-        "numberOfHours": usage.summary.number_of_hours,
-    });
+    let state_payload = build_state_payload(usage);
     debug!("State payload: {state_payload}");
 
     client
@@ -172,7 +199,8 @@ where
             false,
             state_payload.to_string(),
         )
-        .await?;
+        .await
+        .context("publishing state")?;
     debug!("Published state to topic: {state_topic}");
 
     // Wait for the eventloop task to finish (all publishes acknowledged)

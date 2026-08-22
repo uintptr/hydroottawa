@@ -1,16 +1,16 @@
-mod display;
-
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use clap::Parser;
 use dialoguer::Password;
+use hydroottawa::display::{ProfileDisplay, UsageDisplay};
 use hydroottawa::mqtt_pub::mqtt_publish;
-use hydroottawa_api::{api::HoApi, auth::HoAuth};
+use hydroottawa_api::{
+    api::{DebugResponses, HoApi},
+    auth::HoAuth,
+};
 use log::LevelFilter;
 use rstaples::logging::StaplesLogger;
 use std::env;
-
-use display::{ProfileDisplay, UsageDisplay};
 
 const FALLBACK_DATE: NaiveDate = match NaiveDate::from_ymd_opt(2025, 1, 1) {
     Some(date) => date,
@@ -18,28 +18,25 @@ const FALLBACK_DATE: NaiveDate = match NaiveDate::from_ymd_opt(2025, 1, 1) {
 };
 
 fn yesterday() -> NaiveDate {
-    Local::now()
-        .date_naive()
-        .pred_opt()
-        .unwrap_or(FALLBACK_DATE)
+    Local::now().date_naive().pred_opt().unwrap_or(FALLBACK_DATE)
 }
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct UserArgs {
-    /// verbose
+    /// Verbose logging
     #[arg(short, long)]
     verbose: bool,
 
-    /// date
+    /// Date to fetch usage for (defaults to yesterday)
     #[arg(short, long, default_value_t = yesterday())]
     date: NaiveDate,
 
-    /// Username
+    /// Hydro Ottawa username (email)
     #[arg(short, long)]
     username: String,
 
-    /// Username
+    /// MQTT broker (host or host:port) to publish to instead of printing
     #[arg(short, long)]
     mqtt: Option<String>,
 }
@@ -64,17 +61,14 @@ async fn main() -> Result<()> {
         LevelFilter::Error
     };
 
-    StaplesLogger::new()
-        .with_colors()
-        .with_log_level(log_level)
-        .start();
+    StaplesLogger::new().with_colors().with_log_level(log_level).start();
 
     let password = get_password(&args.username)?;
 
     let auth = HoAuth::new(&args.username, &password).await?;
     println!("Authentication successful!");
 
-    let api = HoApi::new(false);
+    let api = HoApi::new(DebugResponses::Off);
 
     let profile = api.profile(&auth).await?;
     let usage = api.hourly(&auth, &args.date).await?;

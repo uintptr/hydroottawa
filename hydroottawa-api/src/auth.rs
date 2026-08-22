@@ -3,15 +3,22 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::error::{Error, Result};
+use crate::{
+    HO_API_URI,
+    error::{Error, Result},
+};
 
+/// Hydro Ottawa credentials: the custom JWT plus the underlying Cognito
+/// tokens it was exchanged from.
 pub struct HoAuth {
+    /// Custom JWT returned by `/app-token`; sent as the bearer token.
     pub jwt_token: String,
+    /// Cognito ID token; sent as the `x-id` header.
     pub id_token: String,
+    /// Cognito access token; sent as the `x-access` header.
     pub access_token: String,
 }
 
-const HO_API_URI: &str = "https://api-myaccount.hydroottawa.com";
 const COGNITO_ENDPOINT: &str = "https://cognito-idp.ca-central-1.amazonaws.com/";
 const CLIENT_ID: &str = "7scfcis6ecucktmp4aqi1jk6cb";
 const USER_POOL_ID: &str = "ca-central-1_VYnwOhMBK";
@@ -28,7 +35,6 @@ struct InitiateAuthRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct InitiateAuthResponse {
-    //challenge_name: String,
     challenge_parameters: ChallengeParameters,
 }
 
@@ -55,10 +61,7 @@ struct RespondToAuthChallengeRequest {
 #[serde(rename_all = "PascalCase")]
 struct AuthenticationResult {
     access_token: String,
-    //expires_in: u32,
     id_token: String,
-    //refresh_token: String,
-    //token_type: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +71,13 @@ struct RespondToAuthChallengeResponse {
 }
 
 impl HoAuth {
+    /// Authenticate with Cognito SRP, then exchange the Cognito tokens
+    /// for a Hydro Ottawa JWT at `/app-token`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any HTTP request fails, the SRP handshake
+    /// fails, or the JWT response header is missing or malformed.
     pub async fn new<U, P>(username: U, password: P) -> Result<Self>
     where
         U: AsRef<str>,

@@ -3,6 +3,7 @@ use reqwest::Client;
 use serde::Serialize;
 
 use crate::{
+    HO_API_URI,
     auth::HoAuth,
     error::Result,
     types::{HoHourlyUsage, HoProfile},
@@ -13,16 +14,25 @@ struct HourlyRequest {
     date: String,
 }
 
-pub struct HoApi {
-    client: Client,
-    debug_responses: bool,
+/// Controls whether raw API responses are dumped to stderr for debugging.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebugResponses {
+    /// Do not dump responses.
+    Off,
+    /// Pretty-print the raw JSON response to stderr before deserializing.
+    On,
 }
 
-const HO_API_URI: &str = "https://api-myaccount.hydroottawa.com";
+/// Client for the Hydro Ottawa `myAccount` REST API.
+pub struct HoApi {
+    client: Client,
+    debug_responses: DebugResponses,
+}
 
 impl HoApi {
+    /// Create a new API client.
     #[must_use]
-    pub fn new(debug_responses: bool) -> Self {
+    pub fn new(debug_responses: DebugResponses) -> Self {
         let client = Client::new();
 
         Self {
@@ -31,6 +41,12 @@ impl HoApi {
         }
     }
 
+    /// Fetch the account profile for the authenticated user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails or the response cannot
+    /// be deserialized into [`HoProfile`].
     pub async fn profile(&self, auth: &HoAuth) -> Result<HoProfile> {
         let url = format!("{HO_API_URI}/profile");
 
@@ -46,8 +62,8 @@ impl HoApi {
             .json::<serde_json::Value>()
             .await?;
 
-        if self.debug_responses {
-            dbg!(&profile_dict);
+        if self.debug_responses == DebugResponses::On {
+            eprintln!("{profile_dict:#?}");
         }
 
         let profile: HoProfile = serde_json::from_value(profile_dict)?;
@@ -55,6 +71,12 @@ impl HoApi {
         Ok(profile)
     }
 
+    /// Fetch hourly usage intervals and the summary for `date`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails or the response cannot
+    /// be deserialized into [`HoHourlyUsage`].
     pub async fn hourly(&self, auth: &HoAuth, date: &NaiveDate) -> Result<HoHourlyUsage> {
         let url = format!("{HO_API_URI}/usage/consumption/hourly");
 
@@ -75,8 +97,8 @@ impl HoApi {
             .json::<serde_json::Value>()
             .await?;
 
-        if self.debug_responses {
-            dbg!(&hourly_dict);
+        if self.debug_responses == DebugResponses::On {
+            eprintln!("{hourly_dict:#?}");
         }
 
         let usage: HoHourlyUsage = serde_json::from_value(hourly_dict)?;
