@@ -1,17 +1,24 @@
 use aws_cognito_srp::{SrpClient, User};
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use ureq::Agent;
 
-use crate::error::{Error, Result};
+use crate::{
+    HO_API_URI,
+    error::{Error, Result},
+};
 
+/// Hydro Ottawa credentials: the custom JWT plus the underlying Cognito
+/// tokens it was exchanged from.
 pub struct HoAuth {
+    /// Custom JWT returned by `/app-token`; sent as the bearer token.
     pub jwt_token: String,
+    /// Cognito ID token; sent as the `x-id` header.
     pub id_token: String,
+    /// Cognito access token; sent as the `x-access` header.
     pub access_token: String,
 }
 
-const HO_API_URI: &str = "https://api-myaccount.hydroottawa.com";
 const COGNITO_ENDPOINT: &str = "https://cognito-idp.ca-central-1.amazonaws.com/";
 const CLIENT_ID: &str = "7scfcis6ecucktmp4aqi1jk6cb";
 const USER_POOL_ID: &str = "ca-central-1_VYnwOhMBK";
@@ -28,7 +35,6 @@ struct InitiateAuthRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct InitiateAuthResponse {
-    //challenge_name: String,
     challenge_parameters: ChallengeParameters,
 }
 
@@ -55,10 +61,7 @@ struct RespondToAuthChallengeRequest {
 #[serde(rename_all = "PascalCase")]
 struct AuthenticationResult {
     access_token: String,
-    //expires_in: u32,
     id_token: String,
-    //refresh_token: String,
-    //token_type: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,12 +71,19 @@ struct RespondToAuthChallengeResponse {
 }
 
 impl HoAuth {
-    pub async fn new<U, P>(username: U, password: P) -> Result<Self>
+    /// Authenticate with Cognito SRP, then exchange the Cognito tokens
+    /// for a Hydro Ottawa JWT at `/app-token`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any HTTP request fails, the SRP handshake
+    /// fails, or the JWT response header is missing or malformed.
+    pub fn new<U, P>(username: U, password: P) -> Result<Self>
     where
         U: AsRef<str>,
         P: AsRef<str>,
     {
-        let client = Client::new();
+        let agent = Agent::new_with_defaults();
 
         let username = username.as_ref();
         let password = password.as_ref();
@@ -96,18 +106,16 @@ impl HoAuth {
             client_metadata: HashMap::new(),
         };
 
-        let initiate_response = client
+        let initiate_response = agent
             .post(COGNITO_ENDPOINT)
             .header("Content-Type", "application/x-amz-json-1.1")
             .header(
                 "X-Amz-Target",
                 "AWSCognitoIdentityProviderService.InitiateAuth",
             )
-            .json(&initiate_request)
-            .send()
-            .await?
-            .json::<InitiateAuthResponse>()
-            .await?;
+            .send_json(&initiate_request)?
+            .body_mut()
+            .read_json::<InitiateAuthResponse>()?;
 
         // Step 3: Verify the challenge and generate password verifier
         let verification = srp_client.verify(
@@ -141,28 +149,25 @@ impl HoAuth {
         };
 
         // Step 5: Respond to challenge and get tokens
-        let auth_result = client
+        let auth_result = agent
             .post(COGNITO_ENDPOINT)
             .header("Content-Type", "application/x-amz-json-1.1")
             .header(
                 "X-Amz-Target",
                 "AWSCognitoIdentityProviderService.RespondToAuthChallenge",
             )
-            .json(&respond_request)
-            .send()
-            .await?
-            .json::<RespondToAuthChallengeResponse>()
-            .await?;
+            .send_json(&respond_request)?
+            .body_mut()
+            .read_json::<RespondToAuthChallengeResponse>()?;
 
         // Step 6: Exchange Cognito tokens for Hydro Ottawa JWT
         let app_token_url = format!("{HO_API_URI}/app-token");
-        let response = client
+        let response = agent
             .get(&app_token_url)
             .header("Accept", "application/json")
             .header("x-id", &auth_result.authentication_result.id_token)
             .header("x-access", &auth_result.authentication_result.access_token)
-            .send()
-            .await?;
+            .call()?;
 
         // Extract the custom JWT from the response header
         let jwt_token = response

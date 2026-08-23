@@ -1,8 +1,9 @@
 use chrono::NaiveDate;
-use reqwest::Client;
 use serde::Serialize;
+use ureq::Agent;
 
 use crate::{
+    HO_API_URI,
     auth::HoAuth,
     error::Result,
     types::{HoHourlyUsage, HoProfile},
@@ -13,41 +14,62 @@ struct HourlyRequest {
     date: String,
 }
 
-pub struct HoApi {
-    client: Client,
-    debug_responses: bool,
+/// Controls whether raw API responses are dumped to stderr for debugging.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebugResponses {
+    /// Do not dump responses.
+    Off,
+    /// Pretty-print the raw JSON response to stderr before deserializing.
+    On,
 }
 
-const HO_API_URI: &str = "https://api-myaccount.hydroottawa.com";
+/// Format a JWT as an `Authorization` header value.
+///
+/// ureq has no `bearer_auth` shorthand, so build the value by hand.
+fn bearer(jwt: &str) -> String {
+    format!("Bearer {jwt}")
+}
+
+/// Client for the Hydro Ottawa `myAccount` REST API.
+pub struct HoApi {
+    agent: Agent,
+    debug_responses: DebugResponses,
+}
 
 impl HoApi {
+    /// Create a new API client.
     #[must_use]
-    pub fn new(debug_responses: bool) -> Self {
-        let client = Client::new();
+    pub fn new(debug_responses: DebugResponses) -> Self {
+        let agent = Agent::new_with_defaults();
 
         Self {
-            client,
+            agent,
             debug_responses,
         }
     }
 
-    pub async fn profile(&self, auth: &HoAuth) -> Result<HoProfile> {
+    /// Fetch the account profile for the authenticated user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails or the response cannot
+    /// be deserialized into [`HoProfile`].
+    pub fn profile(&self, auth: &HoAuth) -> Result<HoProfile> {
         let url = format!("{HO_API_URI}/profile");
 
         let profile_dict = self
-            .client
+            .agent
             .get(url)
             .header("Accept", "application/json")
             .header("x-id", &auth.id_token)
             .header("x-access", &auth.access_token)
-            .bearer_auth(&auth.jwt_token)
-            .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?;
+            .header("Authorization", bearer(&auth.jwt_token))
+            .call()?
+            .body_mut()
+            .read_json::<serde_json::Value>()?;
 
-        if self.debug_responses {
-            dbg!(&profile_dict);
+        if self.debug_responses == DebugResponses::On {
+            eprintln!("{profile_dict:#?}");
         }
 
         let profile: HoProfile = serde_json::from_value(profile_dict)?;
@@ -55,7 +77,13 @@ impl HoApi {
         Ok(profile)
     }
 
-    pub async fn hourly(&self, auth: &HoAuth, date: &NaiveDate) -> Result<HoHourlyUsage> {
+    /// Fetch hourly usage intervals and the summary for `date`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails or the response cannot
+    /// be deserialized into [`HoHourlyUsage`].
+    pub fn hourly(&self, auth: &HoAuth, date: &NaiveDate) -> Result<HoHourlyUsage> {
         let url = format!("{HO_API_URI}/usage/consumption/hourly");
 
         let day = HourlyRequest {
@@ -63,20 +91,18 @@ impl HoApi {
         };
 
         let hourly_dict = self
-            .client
+            .agent
             .post(url)
             .header("Accept", "application/json")
             .header("x-id", &auth.id_token)
             .header("x-access", &auth.access_token)
-            .bearer_auth(&auth.jwt_token)
-            .json(&day)
-            .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?;
+            .header("Authorization", bearer(&auth.jwt_token))
+            .send_json(&day)?
+            .body_mut()
+            .read_json::<serde_json::Value>()?;
 
-        if self.debug_responses {
-            dbg!(&hourly_dict);
+        if self.debug_responses == DebugResponses::On {
+            eprintln!("{hourly_dict:#?}");
         }
 
         let usage: HoHourlyUsage = serde_json::from_value(hourly_dict)?;

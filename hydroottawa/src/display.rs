@@ -1,12 +1,32 @@
-use hydroottawa_api::types::{HoHourlyUsage, HoProfile};
+use hydroottawa_api::types::{HoAddress, HoHourlyUsage, HoProfile};
 use std::fmt;
 use tabled::Table;
 
+/// Display adapter for printing a [`HoProfile`] as text.
 pub struct ProfileDisplay<'a>(pub &'a HoProfile);
+
+/// Display adapter for printing a [`HoHourlyUsage`] summary and table.
 pub struct UsageDisplay<'a>(pub &'a HoHourlyUsage);
 
+fn write_address(f: &mut fmt::Formatter<'_>, address: &HoAddress) -> fmt::Result {
+    let apartment = if address.apartment.is_empty() {
+        String::new()
+    } else {
+        format!(", Apt {}", address.apartment)
+    };
+    writeln!(
+        f,
+        "  {} {}{apartment}",
+        address.street_number, address.street_name
+    )?;
+    writeln!(
+        f,
+        "  {}, {} {}",
+        address.city, address.province, address.postal_code
+    )
+}
+
 impl fmt::Display for ProfileDisplay<'_> {
-    #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let profile = self.0;
         writeln!(f, "\n=== Account Information ===")?;
@@ -18,49 +38,9 @@ impl fmt::Display for ProfileDisplay<'_> {
             profile.account_information.pseudo_name
         )?;
         writeln!(f, "\nService Address:")?;
-        writeln!(
-            f,
-            "  {} {}{}",
-            profile.account_information.service_address.street_number,
-            profile.account_information.service_address.street_name,
-            if profile.account_information.service_address.apartment.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    ", Apt {}",
-                    profile.account_information.service_address.apartment
-                )
-            }
-        )?;
-        writeln!(
-            f,
-            "  {}, {} {}",
-            profile.account_information.service_address.city,
-            profile.account_information.service_address.province,
-            profile.account_information.service_address.postal_code
-        )?;
+        write_address(f, &profile.account_information.service_address)?;
         writeln!(f, "\nMailing Address:")?;
-        writeln!(
-            f,
-            "  {} {}{}",
-            profile.account_information.mailing_address.street_number,
-            profile.account_information.mailing_address.street_name,
-            if profile.account_information.mailing_address.apartment.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    ", Apt {}",
-                    profile.account_information.mailing_address.apartment
-                )
-            }
-        )?;
-        writeln!(
-            f,
-            "  {}, {} {}",
-            profile.account_information.mailing_address.city,
-            profile.account_information.mailing_address.province,
-            profile.account_information.mailing_address.postal_code
-        )?;
+        write_address(f, &profile.account_information.mailing_address)?;
         writeln!(f, "\nContact:")?;
         if !profile.account_information.home_phone_number.is_empty() {
             writeln!(
@@ -158,14 +138,15 @@ impl fmt::Display for UsageDisplay<'_> {
 
         writeln!(f, "\n=== Hourly Intervals ===")?;
 
-        // Create displayable intervals for the table
-        let intervals: Vec<IntervalDisplay> = usage
+        // Create displayable intervals for the table (borrows the strings,
+        // so no per-row String allocations)
+        let intervals: Vec<IntervalDisplay<'_>> = usage
             .intervals
             .iter()
             .map(|i| IntervalDisplay {
-                start_date_time: i.start_date_time.clone(),
-                end_date_time: i.end_date_time.clone(),
-                rate_band: i.rate_band.clone(),
+                start_date_time: &i.start_date_time,
+                end_date_time: &i.end_date_time,
+                rate_band: &i.rate_band,
                 hourly_usage: format!("{:.2}", i.hourly_usage),
                 hourly_cost: format!("{:.2}", i.hourly_cost),
             })
@@ -180,13 +161,13 @@ impl fmt::Display for UsageDisplay<'_> {
 
 // Helper struct for table display
 #[derive(tabled::Tabled)]
-struct IntervalDisplay {
+struct IntervalDisplay<'a> {
     #[tabled(rename = "Start Time")]
-    start_date_time: String,
+    start_date_time: &'a str,
     #[tabled(rename = "End Time")]
-    end_date_time: String,
+    end_date_time: &'a str,
     #[tabled(rename = "Rate Band")]
-    rate_band: String,
+    rate_band: &'a str,
     #[tabled(rename = "Usage (kWh)")]
     hourly_usage: String,
     #[tabled(rename = "Cost ($)")]
