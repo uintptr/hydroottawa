@@ -12,6 +12,7 @@ aws-cognito-srp = "0.2"
 chrono = "0.4"
 clap = { version = "4.6", features = ["derive", "env"] }
 dialoguer = "0.12"
+env_logger = "0.11"
 log = "0.4"
 rstaples = "0.4"
 rumqttc = "0.25"

@@ -9,8 +9,7 @@ use hydroottawa_api::{
     api::{DebugResponses, HoApi},
     auth::HoAuth,
 };
-use log::{LevelFilter, info};
-use rstaples::logging::StaplesLogger;
+use log::info;
 use std::{env, process::Command};
 use which::which;
 
@@ -26,10 +25,6 @@ fn yesterday() -> NaiveDate {
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct UserArgs {
-    /// Verbose logging
-    #[arg(short, long)]
-    verbose: bool,
-
     /// Date to fetch usage for (defaults to yesterday)
     #[arg(short, long, default_value_t = yesterday())]
     date: NaiveDate,
@@ -85,13 +80,7 @@ fn get_password(username: &str, password_command: Option<&String>) -> Result<Str
 fn main() -> Result<()> {
     let args = UserArgs::parse();
 
-    let log_level = if args.verbose {
-        LevelFilter::Info
-    } else {
-        LevelFilter::Error
-    };
-
-    StaplesLogger::new().with_colors().with_log_level(log_level).start();
+    env_logger::init();
 
     let password = get_password(&args.username, args.password_command.as_ref())?;
 

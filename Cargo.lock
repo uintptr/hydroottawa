@@ -719,6 +719,7 @@ dependencies = [
  "chrono",
  "clap",
  "dialoguer",
+ "env_logger",
  "hydroottawa-api",
  "log",
  "rstaples",

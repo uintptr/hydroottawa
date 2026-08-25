@@ -8,6 +8,7 @@ anyhow.workspace = true
 chrono.workspace = true
 clap.workspace = true
 dialoguer.workspace = true
+env_logger.workspace = true
 hydroottawa-api = { path = "../hydroottawa-api" }
 log.workspace = true
 rstaples.workspace = true

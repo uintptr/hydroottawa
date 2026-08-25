@@ -1,3 +1,5 @@
 /target
 /samples
 /ok
+/.zed
+/Cargo.lock
