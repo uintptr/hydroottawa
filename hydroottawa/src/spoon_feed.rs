@@ -83,6 +83,8 @@ mod tests {
     use hydroottawa_api::types::HoHourlyUsage;
     use log::info;
 
+    use crate::util::hydro_time_to_local;
+
     #[test]
     fn parse_usage() -> Result<()> {
         env_logger::init();
@@ -97,7 +99,7 @@ mod tests {
         let mut total = 0.0;
 
         for int in usage.intervals {
-            info!("cost: {}", int.hourly_cost);
+            hydro_time_to_local(&int.start_date_time)?;
             total += int.hourly_cost;
         }
 
