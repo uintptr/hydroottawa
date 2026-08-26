@@ -85,16 +85,18 @@ mod tests {
 
     use crate::util::hydro_time_to_local;
 
+    fn get_usage_sample_file() -> Result<PathBuf> {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let sample = PathBuf::from(root).join("samples").join("usage.json");
+        Ok(sample)
+    }
+
     #[test]
     fn parse_usage() -> Result<()> {
         env_logger::init();
 
-        let root = env!("CARGO_MANIFEST_DIR");
-        let sample = PathBuf::from(root).join("samples").join("usage.json");
-
-        let sample_data = fs::read_to_string(&sample)?;
-
-        let usage: HoHourlyUsage = serde_json::from_str(&sample_data)?;
+        let sample = get_usage_sample_file()?;
+        let usage = HoHourlyUsage::from_file(sample)?;
 
         let mut total = 0.0;
 
@@ -105,6 +107,12 @@ mod tests {
 
         info!("total: {total}");
 
+        Ok(())
+    }
+
+    fn test_publish() -> Result<()> {
+        let sample = get_usage_sample_file()?;
+        let _usage = HoHourlyUsage::from_file(sample)?;
         Ok(())
     }
 }

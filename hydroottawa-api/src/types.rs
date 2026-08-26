@@ -1,3 +1,5 @@
+use std::{fs, io::Result, path::Path};
+
 use serde::{Deserialize, Serialize};
 
 /// Profile response: account and user information.
@@ -87,4 +89,17 @@ pub struct HoSummary {
 pub struct HoHourlyUsage {
     pub intervals: Vec<HoInterval>,
     pub summary: HoSummary,
+}
+
+impl HoHourlyUsage {
+    pub fn from_file<P>(file: P) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let sample_data = fs::read_to_string(file)?;
+
+        let usage: HoHourlyUsage = serde_json::from_str(&sample_data)?;
+
+        Ok(usage)
+    }
 }
